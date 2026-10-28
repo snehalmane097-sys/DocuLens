@@ -142,3 +142,30 @@ Run typecheck and build sequentially. Do not run a production build against the 
 OCR for scanned documents, broader table/font coverage, currency-aware reconciliation, richer line-item review, evaluation on held-out invoices, authenticated multi-user deployment and a production storage/retention strategy. None is represented as implemented.
 
 Earlier Phase 1/2A notes and checkpoints are preserved in README_HISTORY.md; this README describes the integrated current implementation.
+
+
+## Acceptance checkpoint — 28 October 2026
+
+The outstanding acceptance tasks were executed against this checkout without application, dependency, lockfile, or dashboard changes. See [ACCEPTANCE_RESULTS.md](ACCEPTANCE_RESULTS.md) for commands and observed results.
+
+- Full backend suite: **82 passed**, one upstream Starlette/AnyIO deprecation warning; no skips or failures. API tests include actual PDF upload, persistence, review conflicts, reprocessing, reconciliation and restart retrieval.
+- Frontend: **16 passed**; typecheck and lint passed; production build completed with exit 0 and all six application route patterns.
+- The prior Windows asyncio stall did not recur: a standalone ProactorEventLoop initialized and ran, and the full TestClient suite completed. Previous evidence placed the stall inside Python socketpair initialization before request handling; this is consistent with a transient execution-context restriction, not a demonstrated application defect. No event-loop, firewall or security changes were made.
+- Live `/006` was explicitly reprocessed through its document-details form using the matching original PDF. It is revision **2**, review **pending**, with one record and the revision-1 analysis/review archived. PDF bytes remain unstored. Ordinary uploads remain idempotent and do not automatically refresh older analyses.
+- `/006` source evidence states subtotal **53,767.50**, tax **9,822.16**, shipping **800.00**, round-off **+0.34**, payable **64,390.00**. Their sum is 64,390.00. The old record omitted shipping; no evidence supported the reported 5,767.50 subtotal. No values were corrected directly in SQLite.
+- The stated-tax payable check passes with zero detected arithmetic mismatches. CGST/SGST component checks, item-table completeness, and unlabelled pre-round total remain unknown. Passing the payable check is not full invoice validation or approval.
+- Responsive spot checks used 1440x900 desktop and 390x844 mobile. Saved details, mobile navigation/history and populated overview were inspected; upload/analytics/reconciliation shells also rendered at mobile width. The mobile page stayed within the viewport and wide tables used local horizontal scroll. This is a spot check, not an exhaustive browser/device/accessibility audit. Temporary viewport overrides were reset.
+
+Start the existing local services in separate PowerShell terminals:
+
+```powershell
+cd C:\Doculens
+.\backend\run.ps1
+```
+
+```powershell
+cd C:\Doculens\frontend
+npm run dev
+```
+
+SQLite defaults to `backend/data/doculens.sqlite3`; override with `DOCULENS_DB_PATH` if needed. Backend `.env` is loaded by the launcher. Frontend `NEXT_PUBLIC_API_URL` defaults to `http://127.0.0.1:8000`. Keep both services local. No additional setup or dependency change was needed for this checkpoint.
