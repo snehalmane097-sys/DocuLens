@@ -1,0 +1,65 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+.env.*.local
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.tsbuildinfo
+uploads/
+coverage/
+playwright-report/
+test-results/
+
+.env.*
+!.env.example
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.log
+backend/data/
+backend/.test-tmp/
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.setup-tmp/
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+coverage/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Local databases and generated data
+backend/data/
+data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs and OS files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Generated Python setup files
+.setup-tmp/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1 @@
+export default function Loading() { return <div role="status" aria-label="Loading workspace" className="loading-state"><div className="skeleton skeleton-title"/><div className="stats-grid">{[1,2,3,4].map(n => <div key={n} className="skeleton skeleton-card"/>)}</div><div className="skeleton skeleton-panel"/><span className="sr-only">Loading workspace…</span></div>; }

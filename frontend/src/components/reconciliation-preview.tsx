@@ -1,0 +1,17 @@
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+import { GitCompareArrows } from 'lucide-react';
+import { documents, money } from '@/lib/mock-data';
+import { comparison, invoiceTotals, orderTotals, reconciliationExample } from '@/lib/reconciliation-data';
+import { EmptyState, Panel } from './ui';
+export function ReconciliationPreview() {
+  const [invoiceId,setInvoice] = useState(reconciliationExample.invoiceId);
+  const [orderId,setOrder] = useState(reconciliationExample.orderId);
+  const supported = invoiceId === reconciliationExample.invoiceId && orderId === reconciliationExample.orderId;
+  const differences = comparison.filter(row=>!row.matched);
+  function display(key:string,value:string|number) { return key === 'unitPrice' ? money(Number(value)) : key === 'taxRate' ? value + '%' : String(value); }
+  return <><Panel title="Choose a document pair" subtitle="Only the Acme pair has an authored comparison scenario"><div className="compare-selectors"><label>Invoice<select value={invoiceId} onChange={e=>setInvoice(e.target.value)}>{documents.filter(d=>d.type === 'Invoice').map(d=><option key={d.id} value={d.id}>{d.reference} / {d.vendor}</option>)}</select></label><GitCompareArrows size={24}/><label>Purchase order<select value={orderId} onChange={e=>setOrder(e.target.value)}>{documents.filter(d=>d.type === 'Purchase order').map(d=><option key={d.id} value={d.id}>{d.reference} / {d.vendor}</option>)}</select></label></div></Panel>
+    {!supported ? <Panel title="Comparison"><EmptyState title="No sample scenario for this pair" description="Choose Acme invoice INV-2026-0842 and purchase order PO-2026-0318. No automatic matching is connected."/></Panel> : <><div className="demo-notice comparison-notice" role="status">{differences.length} field differences · Invoice total is {money(invoiceTotals.total-orderTotals.total)} higher. Severity is a fixed demo review rule, not an ML prediction.</div><Panel title="Invoice versus purchase order" subtitle="Exact field equality; totals calculated from quantity, unit price, and tax rate"><div className="table-scroll"><table><caption className="sr-only">Simulated Acme invoice and purchase order comparison</caption><thead><tr><th>Field</th><th>Invoice</th><th>Purchase order</th><th>Finding / severity</th></tr></thead><tbody>{comparison.map(row=><tr key={row.key} className={!row.matched ? 'difference-row':''}><th scope="row">{row.label}</th><td>{display(row.key,row.invoice)}</td><td>{display(row.key,row.order)}</td><td><span className={'badge ' + (row.matched ? 'success':'warning')}>{row.matched ? 'Matched':row.severity + ' / Different'}</span></td></tr>)}{(['subtotal','tax','total'] as const).map(key=><tr key={key}><th scope="row">{key === 'tax' ? 'Tax amount':key === 'total' ? 'Total':'Subtotal'}</th><td>{money(invoiceTotals[key])}</td><td>{money(orderTotals[key])}</td><td className="muted">Calculated consequence</td></tr>)}</tbody></table></div><div className="review-findings">{differences.map(row=><div key={row.key}><h3>{row.label} difference · {row.severity}</h3><p>{row.explanation}</p></div>)}<p className="form-hint">Subtotal = quantity × unit price. Tax = subtotal × rate / 100, rounded to two decimals. Total = subtotal + tax. Subtotal, tax amount, and total differences are consequences of the two field differences, not extra findings.</p><Link className="button primary" href={'/documents/'+invoiceId}>Review sample invoice</Link></div></Panel></>}
+  </>;
+}
