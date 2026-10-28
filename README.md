@@ -1,4 +1,4 @@
-# DocuLens AI
+# DocuLens 
 
 **Intelligent invoice extraction, validation, and reconciliation.**
 
