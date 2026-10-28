@@ -4,7 +4,7 @@ import type { DocumentRecord } from '@/lib/types';
 import { EmptyState } from './ui';
 const shortDate = (value:string) => new Intl.DateTimeFormat('en-IN', {day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Kolkata'}).format(new Date(value + 'T00:00:00+05:30'));
 export function VolumeChart({ records = documents, source = "sample" }: {records?:DocumentRecord[];source?:"sample"|"real"}) {
-  const days = volumeByDate(records);
+  const days = volumeByDate(records).slice(-7);
   if (!days.length) return <EmptyState title="No document activity" description="Document activity will appear here when records are available."/>;
   const max = Math.max(3, ...days.map(d => d.count));
   return <div className="volume-chart" role="img" aria-label={days.map(d => shortDate(d.date) + ': ' + d.count + ' ' + source + ' documents').join(', ')}>
@@ -14,7 +14,7 @@ export function VolumeChart({ records = documents, source = "sample" }: {records
 export function StatusChart({ records = documents, source = "sample" }: {records?:DocumentRecord[];source?:"sample"|"real"}) {
   const s = summarize(records);
   if (!s.total) return <EmptyState title="No status data" description="Status summaries will appear when records are available."/>;
-  const segments = [{label:'Processed',count:s.processed,color:'#087f73',className:'teal'}, {label:'Needs review',count:s.review,color:'#e4ad53',className:'amber'}, {label:'Pending',count:s.pending,color:'#dce3e7',className:'gray'}];
+  const segments = [{label:'Approved',count:s.processed,color:'#527361',className:'teal'}, {label:'Needs review',count:s.review,color:'#c5a56c',className:'amber'}, {label:'Unreadable',count:s.pending,color:'#dce1d8',className:'gray'}];
   let offset = 0;
   return <div className="status-chart"><svg viewBox="0 0 120 120" role="img" aria-label={source + ' statuses: ' + segments.map(d=>d.label + ': ' + d.count).join(', ')}>{segments.map(segment => {
     const start = offset; const percent = segment.count/s.total*100; offset += percent;

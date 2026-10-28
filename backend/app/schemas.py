@@ -83,6 +83,9 @@ class InvoiceAnalysis(BaseModel):
     validation: InvoiceValidation
     warnings: list[str]
     text_excerpt: str
+    ocr_used: bool = False
+    ocr_pages: list[dict] = Field(default_factory=list)
+    review_required: bool = True
     stored: bool = False
     document_id: str | None = None
     version: int | None = None

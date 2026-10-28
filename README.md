@@ -4,7 +4,7 @@ DocuLens is a local document-understanding application built with Next.js, TypeS
 
 ## Windows setup
 
-Use Windows 10/11, VS Code, Node.js 22 LTS with npm, and Python 3.12. Keep the existing frontend lockfile. No PostgreSQL, cloud account, OCR engine or external AI key is required.
+Use Windows 10/11, VS Code, Node.js 22 LTS with npm, and Python 3.12. Keep the existing frontend lockfile. No PostgreSQL, cloud account or external AI key is required. Optional OCR needs the separate native tools documented below.
 
 From PowerShell:
 
@@ -72,7 +72,7 @@ Upload a PDF, inspect source evidence and warnings, open the saved document, ent
 | Method and endpoint | Contract |
 | --- | --- |
 | GET /api/health | Genuine service status, phase 4 and PDF dependency availability |
-| POST /api/documents/analyze | Multipart **file** containing one PDF; optional explicit reprocess_version query |
+| POST /api/documents/analyze | Multipart **file** containing one PDF, PNG or JPEG; optional explicit reprocess_version query |
 | GET /api/documents?offset=0&limit=100 | mode=persistent, items, total; limit 1–500 |
 | GET /api/documents/{id} | Analysis, effective reviewed fields, current validation, revision and duplicate candidates |
 | GET /api/documents/{id}/history | Versioned review/reprocessing events |
@@ -86,7 +86,7 @@ Upload a PDF, inspect source evidence and warnings, open the saved document, ent
 
 Analysis HTTP 200 returns filename, status (analyzed/needs_ocr), method, pages, fields, gstin_candidates, line_items, validation, warnings, text_excerpt, stored=true, document_id, version and review_status. Each extracted field has nullable value/evidence and method. Money is a decimal string. Calculated values appear only in validation checks. A successful extraction is not approval.
 
-Upload restrictions: one PDF, 10 MiB maximum, extension/content-type/signature checks, 30 pages and bounded extracted text. Images can be selected for a local preview, but are not processed. Errors: 400 malformed multipart; 413 oversized; 415 wrong file type/signature; 422 encrypted/malformed/unsupported PDF or invalid review; 404 missing record; 409 stale revision/wrong reprocessing file; 503 unavailable dependency/storage.
+Upload restrictions: one PDF, 10 MiB maximum, extension/content-type/signature checks, 30 pages and bounded extracted text. PNG/JPEG images can be processed with optional local OCR; see the current OCR section below. Errors: 400 malformed multipart; 413 oversized; 415 wrong file type/signature; 422 encrypted/malformed/unsupported PDF or invalid review; 404 missing record; 409 stale revision/wrong reprocessing file; 503 unavailable dependency/storage.
 
 Example:
 
@@ -98,7 +98,7 @@ curl.exe -X POST http://127.0.0.1:8000/api/documents/analyze -F "file=@C:\path\i
 
 Label/party/table rules are independent from validation and reconciliation. They support common invoice-number/date aliases, bounded wrapped labels, Indian/international comma grouping, CGST/SGST or IGST, tax total, signed round-off, explicit shipping, final payable labels, and single-row vertical tax summaries. Party-position associations and all GSTIN candidates remain reviewable. Unknown/conflicting fields are never filled from expected regression values.
 
-For Type0 Identity-H financial fonts lacking ToUnicode, the extractor can recover unambiguous financial characters from the embedded TrueType Unicode cmap when CID-to-glyph mapping is identity. It never guesses glyph shifts or edits the uploaded PDF. Unsupported font formats/mappings remain unknown. No OCR, ML inference or external AI is used.
+For Type0 Identity-H financial fonts lacking ToUnicode, the extractor can recover unambiguous financial characters from the embedded TrueType Unicode cmap when CID-to-glyph mapping is identity. It never guesses glyph shifts or edits the uploaded PDF. Unsupported font formats/mappings remain unknown. Optional local OCR is available; no external AI service is used.
 
 Pipe/tab/stable double-space line-item tables are supported with explicit headers. A single clearly delimited vertical item can supply quantity/unit rate; tax-inclusive or ambiguous line amounts are not invented as pre-tax line items. Multi-row vertical tables with omitted repeated identifiers remain partially supported. Missing/unreadable values require human review. Source text is treated as data, never instructions.
 
@@ -139,7 +139,7 @@ Run typecheck and build sequentially. Do not run a production build against the 
 
 ## Future work
 
-OCR for scanned documents, broader table/font coverage, currency-aware reconciliation, richer line-item review, evaluation on held-out invoices, authenticated multi-user deployment and a production storage/retention strategy. None is represented as implemented.
+Validated handwriting recognition, broader OCR/table/font coverage, currency-aware reconciliation, richer line-item review, evaluation on held-out invoices, authenticated multi-user deployment and a production storage/retention strategy. None is represented as implemented.
 
 Earlier Phase 1/2A notes and checkpoints are preserved in README_HISTORY.md; this README describes the integrated current implementation.
 
@@ -169,3 +169,72 @@ npm run dev
 ```
 
 SQLite defaults to `backend/data/doculens.sqlite3`; override with `DOCULENS_DB_PATH` if needed. Backend `.env` is loaded by the launcher. Frontend `NEXT_PUBLIC_API_URL` defaults to `http://127.0.0.1:8000`. Keep both services local. No additional setup or dependency change was needed for this checkpoint.
+
+## Optional local OCR (current implementation)
+
+PDF, PNG and JPEG can use the existing analysis and explicit-reprocessing endpoints. Earlier acceptance checkpoints above predate OCR. No Python wrappers, packages, frontend dependencies or lockfiles were added/changed. SQLite, financial validation and review workflows are reused; original bytes are not persisted.
+
+### Native setup
+
+Tesseract is NOT installed on this implementation machine. Poppler pdftoppm is available through the runtime bundle. Installing pytesseract would not install the engine; this adapter does not need that wrapper. Install a trusted Windows Tesseract build with English eng.traineddata using the [official installation guide](https://tesseract-ocr.github.io/tessdoc/Installation.html). Scanned PDFs also require Poppler pdftoppm. Keep native tools updated.
+
+Add executables to PATH or configure backend .env with actual absolute executable paths:
+
+```dotenv
+DOCULENS_TESSERACT_PATH=C:\Program Files\Tesseract-OCR\tesseract.exe
+# If pdftoppm is not on PATH:
+# DOCULENS_PDFTOPPM_PATH=C:\tools\poppler\Library\bin\pdftoppm.exe
+```
+
+Verify the actual installation (list-langs must include eng), then restart the backend:
+
+```powershell
+& 'C:\Program Files\Tesseract-OCR\tesseract.exe' --version
+& 'C:\Program Files\Tesseract-OCR\tesseract.exe' --list-langs
+pdftoppm -v
+cd C:\Doculens
+.\backend\run.ps1
+```
+
+In another terminal:
+
+```powershell
+cd C:\Doculens\frontend
+npm run dev
+```
+
+GET /api/ocr/status reports executable discovery only, not language-data readiness or recognition accuracy. Image uploads return an actionable 503 if OCR is unavailable. PDFs requiring missing optional tools retain needs_ocr results and setup warnings, preserving digital text. Text-based PDFs still work. No external service receives invoice contents.
+
+### OCR processing, evidence and limits
+
+PDF text is assessed per page. pypdf and existing font recovery remain the digital path. Pages without usable text render individually through Poppler to grayscale PNG with maximum edge 2200 pixels. Tesseract uses English automatic segmentation (--psm 3) and native image processing. Images have signature/header/dimension checks before native decoding. Animated PNGs are rejected. Inputs and intermediate rasters use pipes; originals and raster files are not written to disk by this adapter. Native diagnostics are discarded instead of exposing invoice content or paths.
+
+Limits: unchanged 10 MiB uploads; 30 total PDF pages; at most 8 OCR pages; 12 million image pixels and 8000 pixels per edge; two concurrent OCR jobs; one 45-second rendering/OCR deadline; capped 8 MiB native output, 12,000 words per page and 200,000 parsed characters. Native decoder memory is not an OS sandbox. Keep this local-only. Large documents may need splitting/resizing. Errors: 413 size/dimensions, 422 malformed/native failure/page count, 503 unavailable/busy tools, 504 timeout.
+
+Responses add ocr_used, ocr_pages and review_required. OCR pages contain page number, raster dimensions, recognized lines, minimum word confidence and pixel bbox x/y/width/height. Boxes refer to the OCR raster, not PDF coordinates. OCR-derived fields include page evidence and method markers. Lines containing any word below 80 confidence are excluded entirely from parsing; rejected text remains visible for review. High confidence does not prove correctness. Empty/unreadable OCR returns needs_ocr and unknown fields. Recognized text/evidence/locations persist in existing analysis JSON and can be sensitive. Original image/PDF bytes are not saved.
+
+All OCR results start pending human review. Existing Decimal checks never replace missing extracted fields with calculated values. Reprocessing archives previous analysis/review; identical ordinary uploads retain old results. Use explicit reprocessing after OCR setup changes.
+
+### OCR and handwriting limitations
+
+Handwriting is NOT verified. The engine can attempt it, but Tesseract is primarily for printed text. No dedicated handwriting model, model download or external API was introduced. No actual handwritten invoice fixture was provided/tested. Never rely on handwritten amounts/identifiers without checking the source.
+
+Supply upright images. Custom deskew, arbitrary-rotation search, EXIF correction and contrast enhancement are not implemented. PDF rotation metadata is respected by Poppler. Small, blurred, faint or rotated inputs may fail. Partially scanned regions on otherwise readable PDF pages may not trigger OCR. Existing label/table-layout limits still apply.
+
+### Executed OCR checkpoint (28 October 2026)
+
+- Backend syntax/import passed. Full suite: 98 passed, 1 skipped, one upstream Starlette/AnyIO deprecation warning. The native Tesseract recognition test is the explicit skip; /004 and /006 regressions passed.
+- Frontend: 17 tests passed; typecheck and lint passed. Production build completed with exit 0 and all routes. Two prior build attempts hit EPERM in generated folders; targeted Node mkdir probes succeeded, and the final rerun completed without permission/dependency changes.
+- Browser: PNG selection and real submission executed. Missing Tesseract produced the clear setup error rather than a success/fixture fallback. Native OCR recognition was NOT executed.
+- Actual /004 PDF rasterization succeeded at 1557x2200 pixels. This is renderer verification, not recognition. Synthetic controlled-TSV tests are not real-world OCR accuracy evidence.
+- Printed OCR on a real invoice image: not tested. Handwriting on an actual handwritten invoice: not tested. Tesseract installation with English data and real-document evaluation remain blockers to full OCR/handwriting acceptance.
+
+Commands: backend `.venv\Scripts\python.exe -m compileall -q app`, `.venv\Scripts\python.exe -m pytest -q --basetemp=.test-tmp\ocr-final`; frontend `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`. For native recognition after setup, run `.venv\Scripts\python.exe -m pytest -q tests/test_ocr.py -k native_printed_image_recognition`. A skipped test is not a pass. See OCR_IMPLEMENTATION_RESULTS.md for the exact changed-file inventory.
+
+### Frontend redesign checkpoint (28 October 2026)
+
+The shared shell, overview, saved documents, Analyze page, document details/review, reconciliation and analytics now use the supplied finance-dashboard reference's warm ivory, white and sage design language. Analyze uses one file action, real processing states and a concise summary; extracted details, evidence and review are expandable. Material discrepancies remain visible. Global search and review filters link to real saved documents. No backend contracts, dependencies or lockfiles were changed for the redesign.
+
+Financial aggregates require explicit common currency evidence; missing/mixed currencies are not guessed or combined. Local Inter/Manrope faces are preferred when installed, with system font fallbacks. Frontend tests: 19 passed; typecheck and lint passed. Desktop 1440x1000 and mobile 390x844 main-route checks passed without page-level horizontal overflow. See FRONTEND_REDESIGN_RESULTS.md for exact changed files, build outcome and browser checks. Existing OCR limitations above still apply.
+
+Latest redesign production-build result: exit 1, Windows EPERM creating generated `.next/server/app/reconciliation`, despite successful directory probes. Build acceptance remains blocked; compilation/typecheck success in an intermediate retry is not a completed production build. See the redesign report for retries and exact results.

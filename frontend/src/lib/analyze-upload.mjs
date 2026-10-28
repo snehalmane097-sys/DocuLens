@@ -1,10 +1,10 @@
-/** Submit exactly one PDF; no fixture fallback. State notifications are testable without a browser. */
+/** Submit exactly one PDF or image; no fixture fallback. State notifications are testable without a browser. */
 export async function submitAnalysis(file, apiUrl, onState, fetcher = fetch) {
   onState({status:'loading'});
   try {
     const url = new URL(apiUrl);
     if (!['http:', 'https:'].includes(url.protocol) || !['localhost','127.0.0.1','[::1]'].includes(url.hostname) || url.username || url.password) throw new Error('Configure NEXT_PUBLIC_API_URL to a loopback backend URL.');
-    if (!file.name.toLowerCase().endsWith('.pdf')) throw new Error('Real analysis supports PDF only. Images remain selection previews; OCR is not supported.');
+    if (!/\.(pdf|png|jpe?g)$/i.test(file.name)) throw new Error('Choose a PDF, PNG or JPEG document.');
     const body = new FormData(); body.append('file', file, file.name);
     let response;
     try {

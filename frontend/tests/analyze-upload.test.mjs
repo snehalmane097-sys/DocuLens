@@ -22,8 +22,21 @@ test('server validation, missing dependencies and connection errors become error
     const states=[];await submitAnalysis(file,'http://localhost:8000',s=>states.push(s),fetcher);assert.equal(states[1].status,'error');assert.ok(states[1].message);
   }
 });
-test('images and non-local backend configuration are not submitted',async()=>{
-  for(const [input,url] of [[new File(['png'],'a.png'),'http://localhost:8000'],[file,'https://external.example']]){
+test('unsupported files and non-local backend configuration are not submitted',async()=>{
+  for(const [input,url] of [[new File(['gif'],'a.gif'),'http://localhost:8000'],[file,'https://external.example']]){
     let called=false;const states=[];await submitAnalysis(input,url,s=>states.push(s),async()=>{called=true;});assert.equal(called,false);assert.equal(states[1].status,'error');
   }
+});
+
+
+test('PNG and JPEG use the real endpoint and preserve OCR evidence',async()=>{
+ for(const name of ['scan.png','scan.jpg','scan.jpeg']){
+  const states=[];const input=new File(['image'],name);
+  const response={...result,ocr_used:true,review_required:true,ocr_pages:[{page:1,lines:[{text:'Subtotal: 100.00',confidence:96}]}]};
+  await submitAnalysis(input,'http://localhost:8000',s=>states.push(s),async(url,options)=>{
+   assert.equal(options.body.get('file').name,name);
+   return {ok:true,json:async()=>response};
+  });
+  assert.equal(states[1].status,'success');assert.deepEqual(states[1].result,response);
+ }
 });

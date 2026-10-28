@@ -28,7 +28,7 @@ def cors_origins():
 
 
 def create_app(database_path=None):
-    app=FastAPI(title="DocuLens AI API",version="0.4.0",description="Local PDF extraction, SQLite history, human review and deterministic reconciliation. No cloud or OCR.")
+    app=FastAPI(title="DocuLens AI API",version="0.4.0",description="Local PDF extraction, SQLite history, human review and deterministic reconciliation. Optional local OCR; no cloud.")
     store=DocumentStore(database_path)
     origins=cors_origins()
     app.add_middleware(CORSMiddleware,allow_origins=origins,allow_credentials=False,allow_methods=["GET","POST"],allow_headers=["Accept","Content-Type"])
@@ -56,6 +56,13 @@ def create_app(database_path=None):
     @router.get("/health",response_model=Health,tags=["health"])
     def health():
         return Health(phase=4,processing_available=all(importlib.util.find_spec(n) is not None for n in ("pypdf","python_multipart")))
+
+    @router.get("/ocr/status",tags=["health"])
+    def ocr_status():
+        from .ocr import executable
+        return {"engine":"tesseract", "engine_found":bool(executable('tesseract')),
+                "pdf_renderer_found":bool(executable('pdftoppm')), "language":"eng",
+                "handwriting_verified":False, "message":"Executable discovery only. A real upload verifies language data and operation. No external upload."}
 
     @router.get("/documents",response_model=DocumentList,tags=["documents"])
     def list_documents(offset:int=Query(0,ge=0),limit:int=Query(100,ge=1,le=500)):
@@ -102,7 +109,7 @@ def create_app(database_path=None):
         document=await run_in_threadpool(store.get,identifier)
         filename,data=await receive_pdf(request)
         if hashlib.sha256(data).hexdigest()!=document["content_hash"]:
-            raise HTTPException(409,"Reprocessing requires the original PDF bytes for this document.")
+            raise HTTPException(409,"Reprocessing requires the original document bytes for this document.")
         analysis=await run_in_threadpool(analyze_pdf,filename,data)
         return await run_in_threadpool(store.save,analysis,data,version)
 

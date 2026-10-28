@@ -19,7 +19,7 @@ export function FileIcon({ type = 'Invoice' }: { type?: string }) {
   return <span className={'file-icon ' + (type === 'Purchase order' ? 'purple' : '')}><FileText size={19} /></span>;
 }
 export function UploadLink() {
-  return <Link className="button primary" href="/upload"><span aria-hidden="true">+</span> Upload document</Link>;
+  return <Link className="button primary" href="/upload"><span aria-hidden="true">+</span> Analyze invoice</Link>;
 }
 export function DetailLink({ id }: { id: string }) {
   return <Link className="icon-button" href={'/documents/' + id} aria-label="Review document"><ArrowUpRight size={18} /></Link>;

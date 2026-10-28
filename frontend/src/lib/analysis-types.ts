@@ -1,5 +1,6 @@
 export interface AnalysisResult {
   filename: string; status: 'analyzed' | 'needs_ocr'; method: string; pages: number; stored: boolean; document_id?:string; version?:number; review_status?:string;
+  ocr_used?:boolean; review_required?:boolean; ocr_pages?:Array<{page:number;width:number;height:number;lines:Array<{text:string;accepted:boolean;confidence:number;bbox:number[]}>}>;
   fields: Record<string,{value:string|null;evidence:string|null;method:string}>;
   gstin_candidates?: Array<{value:string;party:"supplier"|"buyer"|"unknown";evidence:string;method:string;line:number}>;
   line_items: Array<{description:string;quantity:string|null;unit_rate:string|null;line_total:string|null;tax_amount:string|null;tax_rate:string|null;evidence:string}>;
