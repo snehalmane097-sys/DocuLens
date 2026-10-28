@@ -68,7 +68,7 @@ def money(raw, signed=False):
 
 def tax_money(raw):
     # A rate must be a complete percentage token, separated from a complete amount.
-    rate = re.match(r"^@?\s*\d+(?:\.\d+)?\s*%(?:\s*[:=]\s*|\s+)",raw)
+    rate = re.match(r"^(?:@?\s*\d+(?:\.\d+)?\s*%|\(\s*\d+(?:\.\d+)?\s*%\s*\))(?:\s*[:=]\s*|\s+)",raw)
     return money(raw[rate.end():]) if rate else money(raw)
 
 
@@ -106,11 +106,28 @@ def is_label(line):
     return any(re.match(r"^(?:" + label + r")(?:\s*[:=]|\s*$)", line, re.I) for label in LABELS.values()) or bool(re.match(r"^(?:(?:supplier|buyer|customer)\s*)?GST(?:IN|\s*(?:no\.?|number))\b",line,re.I))
 
 
+# Longest alternatives win when labels overlap (Invoice Date versus Date).
+INLINE_LABEL = re.compile(r"(?<![\w])(?:" + "|".join(
+    sorted(LABELS.values(), key=len, reverse=True)) + r")(?:\s*\(" + CURRENCY + r"\))?(?=\s|[:=]|$)", re.I)
+
+
 def values_for(lines, label):
     """Match complete labels, then at most two bounded value lines."""
     full_label = r"(?:" + label + r")(?:\s*\(" + CURRENCY + r"\))?"
     for i,line in enumerate(lines):
         if not line or line == "\f":
+            continue
+        # OCR often flattens two columns onto one line. Only explicit labels
+        # delimit values; preserve the original line as evidence, not reconstructed text.
+        spans = list(INLINE_LABEL.finditer(line))
+        if spans and (spans[0].start() > 0 or len(spans) > 1):
+            for n, span in enumerate(spans):
+                if not re.fullmatch(full_label, span[0], re.I):
+                    continue
+                end = spans[n+1].start() if n+1 < len(spans) else len(line)
+                raw = re.sub(r"^\s*[:=]\s*", "", line[span.end():end]).strip()
+                raw = raw.rstrip(" |\t").strip()
+                yield raw, line, "inline_labelled_text_rule", i
             continue
         for width in (1,2):
             combined = " ".join(lines[i:i+width])
@@ -244,7 +261,7 @@ def parse_fields(text):
         if key == "invoice_number":
             for line in lines:
                 match = re.fullmatch(r"INVOICE\s+([A-Za-z0-9][A-Za-z0-9/_. -]{0,79})",line,re.I)
-                if match and re.search(r"\d",match[1]) and not re.match(r"(?:date|dated|GSTIN)\b",match[1],re.I):
+                if match and not re.match(LABELS["invoice_number"] + r"(?=\s|[:=]|$)",line,re.I) and re.search(r"\d",match[1]) and not re.match(r"(?:date|dated|GSTIN)\b",match[1],re.I):
                     candidates.append({"value":match[1],"evidence":line,"method":"explicit_invoice_heading_rule"})
         if not candidates:
             invalid += soft_invalid
@@ -279,16 +296,22 @@ def parse_fields(text):
 def identify_parties(lines,fields):
     warnings = []
     supplier_positions = [i for i,line in enumerate(lines) if re.match(r"^(?:supplier|seller|vendor|from)\s*[:=]",line,re.I)]
-    bill_positions = [i for i,line in enumerate(lines) if re.match(r"^(?:bill\s*to|billed\s*to|buyer|customer)(?:\s*[:=]|\s*$)",line,re.I)]
+    bill_positions = [i for i,line in enumerate(lines) if re.match(r"^(?:bill\s*to|billed\s*to|buyer|customer)(?:\s*[:=]|\s*$)",line,re.I) or re.fullmatch(r"(?:bill\s*to|billed\s*to)\s+tax\s+invoice",line,re.I)]
     bill = bill_positions[0] if len(bill_positions) == 1 else None
     supplier = fields["supplier_name"]
     buyer = fields["buyer_name"]
     if supplier["value"] is None and supplier["method"] == "not_found_or_ambiguous" and not supplier_positions:
-        # Header name must be directly followed by a GSTIN (optional GSTIN label).
+        # Header requires a nearby GSTIN, with at most one explicit address
+        # line in between. Never search across party boundaries or unreadable lines.
         header_candidates = []
         for i,line in enumerate(lines[:6]):
-            if name_like(line) and i+1 < len(lines) and re.search(r"\b"+GSTIN+r"\b",lines[i+1],re.I) and (bill is None or i < bill-1):
-                header_candidates.append({"value":line,"evidence":line+"\n"+lines[i+1],"method":"header_position_rule_requires_review","position":i})
+            if not name_like(line):
+                continue
+            j = i+1
+            if j < len(lines) and re.match(r"^\d+\s+",lines[j]) and re.search(r"\b(?:road|street|lane|estate|avenue)\b",lines[j],re.I) and not is_label(lines[j]):
+                j += 1
+            if j < len(lines) and re.search(r"\b"+GSTIN+r"\b",lines[j],re.I) and (bill is None or j < bill):
+                header_candidates.append({"value":line,"evidence":"\n".join(lines[i:j+1]),"method":"header_position_rule_requires_review","position":i})
         # Multiple plausible company headers never select the first silently.
         public = [{k:v for k,v in c.items() if k != "position"} for c in header_candidates]
         supplier = choose(public,"supplier_name",warnings)
@@ -298,8 +321,17 @@ def identify_parties(lines,fields):
         nearby = []
         # Support a company heading immediately before Bill To OR a name after it.
         for i in (bill-1,bill+1):
-            if i >= 0 and i < len(lines) and name_like(lines[i]):
-                nearby.append({"value":lines[i],"evidence":"\n".join(lines[min(i,bill):max(i,bill)+1]),"method":"bill_to_position_rule_requires_review"})
+            if not 0 <= i < len(lines):
+                continue
+            name = lines[i]
+            if i == bill+1:
+                # OCR merges the Bill To name and the adjacent invoice column.
+                # Only an explicit invoice label can bound this adjacent buyer name.
+                boundary = re.search(r"(?<![\w])(?:" + LABELS["invoice_number"] + "|" + LABELS["invoice_date"] + r")(?=\s|[:=]|$)", name, re.I)
+                if boundary:
+                    name = name[:boundary.start()].rstrip(" |\t")
+            if name_like(name):
+                nearby.append({"value":name,"evidence":"\n".join(lines[min(i,bill):max(i,bill)+1]),"method":"bill_to_position_rule_requires_review"})
         if buyer["value"] is not None:
             nearby.append(buyer)
         buyer = choose(nearby,"buyer_name",warnings)

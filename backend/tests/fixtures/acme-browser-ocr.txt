@@ -1,0 +1,20 @@
+ACME OFFICE SUPPLIES
+12 Market Road, Pune, Maharashtra 411001
+GSTIN: 27ABCDE1234F1Z5 | Phone: 020-5550-0101
+BILL TO TAX INVOICE
+Example Manufacturing Pvt Ltd Invoice No. TEST-INV-1042
+45 Industrial Estate, Pune, Maharashtra 411019 Invoice Date 28/10/2026
+[unreadable OCR line]
+[unreadable OCR line]
+1 Printer paper A4 (ream) 10 250.00 18% 2,500.00
+2 Ballpoint pens (box) 5 120.00 18% 600.00
+3 File folders (pack) 4 175.00 18% 700.00
+Total quantity: 19 units Subtotal 3,800.00
+CGST (9%) 342.00
+SGST (9%) 342.00
+Grand Total 4,484.00
+Amount in words:
+Indian Rupees Four Thousand Four Hundred Eighty-Four Only
+Notes:
+1. This is a fictional invoice created only for OCR testing.
+2. Please do not use this document as a real tax invoice. Authorized Signatory
